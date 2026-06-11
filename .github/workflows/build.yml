@@ -25,7 +25,7 @@ on:
       - 'util/buildbot/**'
       - 'util/ci/**'
       - '.github/workflows/**.yml'
-  workflow_dispatch: # Додано можливість ручного запуску збірки
+  workflow_dispatch: # Дозволяє запускати збірку вручну через сайт GitHub
 
 jobs:
   # This is the current gcc compiler (available in jammy)
@@ -128,7 +128,8 @@ jobs:
     name: VS 2022 ${{ matrix.config.arch }}-${{ matrix.type }}
     runs-on: windows-2022
     env:
-      VCPKG_VERSION: a42af01b72c28a8e1d7b48107b33e4f286a55ef6 # 2023.11.20
+      # Використовуємо стабільний комміт, де пакет sdl3 вже точно існує
+      VCPKG_VERSION: 14757362e6e7300c3b88b394119d854db22ef59c
       vcpkg_packages: zlib zstd curl[winssl] openal-soft libvorbis libogg sqlite3 freetype luajit gmp jsoncpp libpng libjpeg-turbo sdl3
     strategy:
       fail-fast: false
@@ -150,7 +151,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Restore from cache and run vcpkg
-        uses: lukka/run-vcpkg@v7
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgArguments: ${{env.vcpkg_packages}}
           vcpkgDirectory: '${{ github.workspace }}\vcpkg'
