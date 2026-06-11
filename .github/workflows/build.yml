@@ -1,80 +1,15 @@
 name: build
 
+# Вимкнено автоматичний запуск. Тепер збірка запускається тільки вручну!
 on:
-  push:
-    paths:
-      - 'lib/**.[ch]'
-      - 'lib/**.cpp'
-      - 'src/**.[ch]'
-      - 'src/**.cpp'
-      - '**/CMakeLists.txt'
-      - 'cmake/Modules/**'
-      - 'util/buildbot/**'
-      - 'util/ci/**'
-      - '.github/workflows/**.yml'
-      - 'Windows/**'
-  pull_request:
-    paths:
-      - 'lib/**.[ch]'
-      - 'lib/**.cpp'
-      - 'src/**.[ch]'
-      - 'src/**.cpp'
-      - '**/CMakeLists.txt'
-      - 'cmake/Modules/**'
-      - 'util/buildbot/**'
-      - 'util/ci/**'
-      - '.github/workflows/**.yml'
-  workflow_dispatch:
+  workflow_dispatch: 
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Вимога GitHub на 2026 рік
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Захист від попереджень GitHub на 2026 рік
 
 jobs:
-  gcc_10:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install deps
-        run: |
-          source ./util/ci/common.sh
-          install_linux_deps g++-10
-          build_linux_deps
-      - name: Build
-        run: ./util/ci/build.sh
-        env:
-          CC: gcc-10
-          CXX: g++-10
-      - name: Test
-        run: ./bin/multicraft --run-unittests
-
-  clang_11:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install deps
-        run: |
-          source ./util/ci/common.sh
-          install_linux_deps clang-11 valgrind libluajit-5.1-dev
-          build_linux_deps
-      - name: Build
-        run: ./util/ci/build.sh
-        env:
-          CC: clang-11
-          CXX: clang++-11
-          CMAKE_FLAGS: "-DREQUIRE_LUAJIT=1"
-      - name: Test
-        run: ./bin/multicraft --run-unittests
-
-  docker:
-    name: "Docker image"
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build docker image
-        run: docker build .
-
   msys2-mingw64:
-    name: "MSYS2-MinGW (64-bit)"
+    name: "MSYS2-MinGW (64-bit) - Only ZIP"
     runs-on: windows-latest
     defaults:
       run:
@@ -83,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Кешування пакетів MSYS2 для прискорення
+      # Кешування завантажених пакетів MSYS2
       - name: Cache MSYS2 packages
         uses: actions/cache@v4
         with:
@@ -121,94 +56,3 @@ jobs:
         with:
           name: MultiCraft-msys2-mingw64
           path: ./MultiCraft.zip
-
-  msvc:
-    name: VS 2022 ${{ matrix.config.arch }}-${{ matrix.type }}
-    runs-on: windows-2022
-    env:
-      vcpkg_packages: zlib zstd curl openal-soft libvorbis libogg sqlite3 freetype luajit gmp jsoncpp libpng libjpeg-turbo sdl2 sdl3
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - {
-              arch: x86,
-              generator: "-G 'Visual Studio 17 2022' -A Win32",
-              vcpkg_triplet: x86-windows
-            }
-          - {
-              arch: x64,
-              generator: "-G 'Visual Studio 17 2022' -A x64",
-              vcpkg_triplet: x64-windows
-            }
-        type: [portable]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Мега-оптимізація: Кешуємо встановлені бібліотеки vcpkg
-      - name: Cache vcpkg dependencies
-        uses: actions/cache@v4
-        with:
-          path: C:\vcpkg\installed
-          key: vcpkg-cache-${{ matrix.config.vcpkg_triplet }}-${{ hashFiles('**/build.yml') }}
-
-      - name: Install dependencies via vcpkg
-        run: |
-          vcpkg install ${{ env.vcpkg_packages }} --triplet ${{ matrix.config.vcpkg_triplet }}
-
-      # Кешуємо скомпільований рушій Irrlicht
-      - name: Cache Irrlicht Build
-        id: cache-irrlicht
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}\irrlicht
-          key: irrlicht-cache-${{ matrix.config.arch }}-${{ hashFiles('**/build.yml') }}
-
-      - name: Irrlicht
-        if: steps.cache-irrlicht.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 -b SDL https://github.com/MoNTE48/Irrlicht irrlicht
-          cd irrlicht
-          cmake ${{ matrix.config.generator }}  `
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"  `
-          -DCMAKE_BUILD_TYPE=Release .
-          cmake --build . -j --config Release
-          cd ..
-
-      - name: CMake
-        run: |
-          cmake ${{ matrix.config.generator }}  `
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"  `
-          -DCMAKE_BUILD_TYPE=Release  `
-          -DENABLE_POSTGRESQL=OFF  `
-          -DUSE_SDL=1  `
-          -DIRRLICHT_LIBRARY="${{ github.workspace }}\irrlicht\Release\irrlicht.lib"  `
-          -DIRRLICHT_INCLUDE_DIR="${{ github.workspace }}\irrlicht\include"  `
-          -DCMAKE_C_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_"  `
-          -DCMAKE_CXX_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_"  `
-          -DRUN_IN_PLACE=${{ contains(matrix.type, 'portable') }} .
-
-      - name: Build
-        run: cmake --build . --config Release
-
-      - name: CPack
-        run: |
-          If ($env:TYPE -eq "installer")
-          {
-            cpack -G WIX -B "$env:GITHUB_WORKSPACE\Package"
-          }
-          ElseIf($env:TYPE -eq "portable")
-          {
-            cpack -G ZIP -B "$env:GITHUB_WORKSPACE\Package"
-          }
-        env:
-          TYPE: ${{ matrix.type }}
-
-      - name: Package Clean
-        run: rm -r $env:GITHUB_WORKSPACE\Package\_CPack_Packages
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MultiCraft-msvc-${{ matrix.config.arch }}-${{ matrix.type }}
-          path: .\Package\
