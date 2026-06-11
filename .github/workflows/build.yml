@@ -183,3 +183,20 @@ jobs:
       - name: CPack
         run: |
           If ($env:TYPE -eq "installer")
+          {
+            cpack -G WIX -B "$env:GITHUB_WORKSPACE\Package"
+          }
+          ElseIf($env:TYPE -eq "portable")
+          {
+            cpack -G ZIP -B "$env:GITHUB_WORKSPACE\Package"
+          }
+        env:
+          TYPE: ${{ matrix.type }}
+
+      - name: Package Clean
+        run: rm -r $env:GITHUB_WORKSPACE\Package\_CPack_Packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MultiCraft-msvc-${{ matrix.config.arch }}-${{ matrix.type }}
+          path: .\Package\
