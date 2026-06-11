@@ -25,7 +25,7 @@ on:
       - 'util/buildbot/**'
       - 'util/ci/**'
       - '.github/workflows/**.yml'
-  workflow_dispatch: # Дозволяє запускати збірку вручну через сайт GitHub
+  workflow_dispatch: # Ручний запуск
 
 jobs:
   # This is the current gcc compiler (available in jammy)
@@ -128,8 +128,6 @@ jobs:
     name: VS 2022 ${{ matrix.config.arch }}-${{ matrix.type }}
     runs-on: windows-2022
     env:
-      # Використовуємо стабільний комміт, де пакет sdl3 вже точно існує
-      VCPKG_VERSION: 14757362e6e7300c3b88b394119d854db22ef59c
       vcpkg_packages: zlib zstd curl[winssl] openal-soft libvorbis libogg sqlite3 freetype luajit gmp jsoncpp libpng libjpeg-turbo sdl3
     strategy:
       fail-fast: false
@@ -137,49 +135,46 @@ jobs:
         config:
           - {
               arch: x86,
-              generator: "-G'Visual Studio 17 2022' -A Win32",
+              generator: "-G 'Visual Studio 17 2022' -A Win32",
               vcpkg_triplet: x86-windows
             }
           - {
               arch: x64,
-              generator: "-G'Visual Studio 17 2022' -A x64",
+              generator: "-G 'Visual Studio 17 2022' -A x64",
               vcpkg_triplet: x64-windows
             }
         type: [portable]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Оновлено до v4
 
-      - name: Restore from cache and run vcpkg
-        uses: lukka/run-vcpkg@v11
+      # Офіційний та нативніший спосіб налаштування vcpkg у GitHub Actions
+      - name: Setup vcpkg
+        uses: microsoft/vcpkg-tool-action@v1
         with:
-          vcpkgArguments: ${{env.vcpkg_packages}}
-          vcpkgDirectory: '${{ github.workspace }}\vcpkg'
-          appendedCacheKey: ${{ matrix.config.vcpkg_triplet }}
-          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
-          vcpkgTriplet: ${{ matrix.config.vcpkg_triplet }}
+          command: vcpkg install ${{ env.vcpkg_packages }} --triplet ${{ matrix.config.vcpkg_triplet }}
 
       - name: Irrlicht
         run: |
           git clone --depth 1 -b SDL https://github.com/MoNTE48/Irrlicht irrlicht
           cd irrlicht
-          cmake ${{matrix.config.generator}}  `
-          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"  `
+          cmake ${{ matrix.config.generator }} `
+          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" `
           -DCMAKE_BUILD_TYPE=Release .
           cmake --build . -j --config Release
           cd ..
 
       - name: CMake
         run: |
-          cmake ${{matrix.config.generator}}  `
-          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"  `
-          -DCMAKE_BUILD_TYPE=Release  `
-          -DENABLE_POSTGRESQL=OFF  `
-          -DUSE_SDL=1  `
-          -DIRRLICHT_LIBRARY="${{ github.workspace }}\irrlicht\Release\irrlicht.lib"  `
-          -DIRRLICHT_INCLUDE_DIR="${{ github.workspace }}\irrlicht\include"  `
-          -DCMAKE_C_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_"  `
-          -DCMAKE_CXX_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_"  `
+          cmake ${{ matrix.config.generator }} `
+          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DENABLE_POSTGRESQL=OFF `
+          -DUSE_SDL=1 `
+          -DIRRLICHT_LIBRARY="${{ github.workspace }}\irrlicht\Release\irrlicht.lib" `
+          -DIRRLICHT_INCLUDE_DIR="${{ github.workspace }}\irrlicht\include" `
+          -DCMAKE_C_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_" `
+          -DCMAKE_CXX_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_" `
           -DRUN_IN_PLACE=${{ contains(matrix.type, 'portable') }} .
 
       - name: Build
@@ -196,7 +191,7 @@ jobs:
             cpack -G ZIP -B "$env:GITHUB_WORKSPACE\Package"
           }
         env:
-          TYPE: ${{matrix.type}}
+          TYPE: ${{ matrix.type }}
 
       - name: Package Clean
         run: rm -r $env:GITHUB_WORKSPACE\Package\_CPack_Packages
