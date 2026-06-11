@@ -1,4 +1,4 @@
-MultiCraft Open Source
+MultiCraft Open Source Windows build
 ======================
 
 ![Build Status](https://github.com/MultiCraft/MultiCraft2/workflows/build/badge.svg)
