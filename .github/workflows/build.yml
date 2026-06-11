@@ -1,6 +1,5 @@
 name: build
 
-# build on c/cpp changes or workflow changes
 on:
   push:
     paths:
@@ -25,10 +24,12 @@ on:
       - 'util/buildbot/**'
       - 'util/ci/**'
       - '.github/workflows/**.yml'
-  workflow_dispatch: # Ручний запуск
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Вимога GitHub на 2026 рік
 
 jobs:
-  # This is the current gcc compiler (available in jammy)
   gcc_10:
     runs-on: ubuntu-22.04
     steps:
@@ -38,19 +39,14 @@ jobs:
           source ./util/ci/common.sh
           install_linux_deps g++-10
           build_linux_deps
-
       - name: Build
-        run: |
-          ./util/ci/build.sh
+        run: ./util/ci/build.sh
         env:
           CC: gcc-10
           CXX: g++-10
-
       - name: Test
-        run: |
-          ./bin/multicraft --run-unittests
+        run: ./bin/multicraft --run-unittests
 
-  # This is the current clang version
   clang_11:
     runs-on: ubuntu-22.04
     steps:
@@ -60,18 +56,14 @@ jobs:
           source ./util/ci/common.sh
           install_linux_deps clang-11 valgrind libluajit-5.1-dev
           build_linux_deps
-
       - name: Build
-        run: |
-          ./util/ci/build.sh
+        run: ./util/ci/build.sh
         env:
           CC: clang-11
           CXX: clang++-11
           CMAKE_FLAGS: "-DREQUIRE_LUAJIT=1"
-
       - name: Test
-        run: |
-          ./bin/multicraft --run-unittests
+        run: ./bin/multicraft --run-unittests
 
   docker:
     name: "Docker image"
@@ -79,8 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build docker image
-        run: |
-          docker build .
+        run: docker build .
 
   msys2-mingw64:
     name: "MSYS2-MinGW (64-bit)"
@@ -91,6 +82,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Кешування пакетів MSYS2 для прискорення
+      - name: Cache MSYS2 packages
+        uses: actions/cache@v4
+        with:
+          path: C:\msys64\var\cache\pacman\pkg
+          key: msys2-pkgs-${{ hashFiles('**/build.yml') }}
 
       - name: Install MSYS2
         uses: msys2/setup-msys2@v2
@@ -128,7 +126,6 @@ jobs:
     name: VS 2022 ${{ matrix.config.arch }}-${{ matrix.type }}
     runs-on: windows-2022
     env:
-      # ДОДАНО ПАКЕТ sdl2 ДЛЯ СУМІСНОСТІ З IRRLICHT
       vcpkg_packages: zlib zstd curl openal-soft libvorbis libogg sqlite3 freetype luajit gmp jsoncpp libpng libjpeg-turbo sdl2 sdl3
     strategy:
       fail-fast: false
@@ -149,12 +146,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Використовуємо попередньо встановлений vcpkg в системі Windows Runner
+      # Мега-оптимізація: Кешуємо встановлені бібліотеки vcpkg
+      - name: Cache vcpkg dependencies
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-cache-${{ matrix.config.vcpkg_triplet }}-${{ hashFiles('**/build.yml') }}
+
       - name: Install dependencies via vcpkg
         run: |
           vcpkg install ${{ env.vcpkg_packages }} --triplet ${{ matrix.config.vcpkg_triplet }}
 
+      # Кешуємо скомпільований рушій Irrlicht
+      - name: Cache Irrlicht Build
+        id: cache-irrlicht
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\irrlicht
+          key: irrlicht-cache-${{ matrix.config.arch }}-${{ hashFiles('**/build.yml') }}
+
       - name: Irrlicht
+        if: steps.cache-irrlicht.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 -b SDL https://github.com/MoNTE48/Irrlicht irrlicht
           cd irrlicht
