@@ -32,7 +32,7 @@ jobs:
   gcc_10:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -54,7 +54,7 @@ jobs:
   clang_11:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -77,7 +77,7 @@ jobs:
     name: "Docker image"
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Build docker image
         run: |
           docker build .
@@ -146,35 +146,34 @@ jobs:
         type: [portable]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 # Оновлено до v4
+        uses: actions/checkout@v4
 
-      # Офіційний та нативніший спосіб налаштування vcpkg у GitHub Actions
-      - name: Setup vcpkg
-        uses: microsoft/vcpkg-tool-action@v1
-        with:
-          command: vcpkg install ${{ env.vcpkg_packages }} --triplet ${{ matrix.config.vcpkg_triplet }}
+      # Використовуємо попередньо встановлений vcpkg в системі Windows Runner
+      - name: Install dependencies via vcpkg
+        run: |
+          vcpkg install ${{ env.vcpkg_packages }} --triplet ${{ matrix.config.vcpkg_triplet }}
 
       - name: Irrlicht
         run: |
           git clone --depth 1 -b SDL https://github.com/MoNTE48/Irrlicht irrlicht
           cd irrlicht
-          cmake ${{ matrix.config.generator }} `
-          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+          cmake ${{ matrix.config.generator }}  `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"  `
           -DCMAKE_BUILD_TYPE=Release .
           cmake --build . -j --config Release
           cd ..
 
       - name: CMake
         run: |
-          cmake ${{ matrix.config.generator }} `
-          -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DENABLE_POSTGRESQL=OFF `
-          -DUSE_SDL=1 `
-          -DIRRLICHT_LIBRARY="${{ github.workspace }}\irrlicht\Release\irrlicht.lib" `
-          -DIRRLICHT_INCLUDE_DIR="${{ github.workspace }}\irrlicht\include" `
-          -DCMAKE_C_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_" `
-          -DCMAKE_CXX_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_" `
+          cmake ${{ matrix.config.generator }}  `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"  `
+          -DCMAKE_BUILD_TYPE=Release  `
+          -DENABLE_POSTGRESQL=OFF  `
+          -DUSE_SDL=1  `
+          -DIRRLICHT_LIBRARY="${{ github.workspace }}\irrlicht\Release\irrlicht.lib"  `
+          -DIRRLICHT_INCLUDE_DIR="${{ github.workspace }}\irrlicht\include"  `
+          -DCMAKE_C_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_"  `
+          -DCMAKE_CXX_FLAGS="-DNO_IRR_COMPILE_WITH_OGLES2_ -DNO_IRR_COMPILE_WITH_DIRECT3D_9_ -DNO_IRR_COMPILE_WITH_DIRECTINPUT_JOYSTICK_ -D_IRR_STATIC_LIB_"  `
           -DRUN_IN_PLACE=${{ contains(matrix.type, 'portable') }} .
 
       - name: Build
